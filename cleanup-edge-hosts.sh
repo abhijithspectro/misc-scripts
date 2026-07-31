@@ -48,10 +48,18 @@ fi
 rm -f /etc/systemd/system/portworx* /usr/lib/systemd/system/portworx* 2>/dev/null || true
 systemctl daemon-reload 2>/dev/null || true
 
-# Unmount OCI rootfs if still mounted.
-if grep -q '/opt/pwx/oci /opt/pwx/oci' /proc/self/mountinfo 2>/dev/null; then
-  umount /opt/pwx/oci || umount -l /opt/pwx/oci || true
-fi
+# Unmount Portworx-related mounts (deepest first). pxctl wipe / stop can leave
+# /opt/pwx/oci and OSD bind mounts busy; tear them down before and after wipe.
+umount_pwx_mounts() {
+  local m
+  while IFS= read -r m; do
+    [[ -n "$m" ]] || continue
+    echo "umount $m"
+    umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null || true
+  done < <(grep -E '/opt/pwx|/var/lib/osd|/etc/pwx' /proc/self/mountinfo 2>/dev/null | awk '{print $5}' | sort -r)
+}
+
+umount_pwx_mounts
 
 # Prefer pxctl node-wipe when binaries remain.
 if [[ -x /opt/pwx/bin/pxctl ]]; then
@@ -69,6 +77,9 @@ if [[ ${#PX_DEVS[@]} -gt 0 ]]; then
 else
   echo "(no pxpool devices to wipe)"
 fi
+
+# Wipe/stop can remount OCI or leave mounts busy — unmount again before rm.
+umount_pwx_mounts
 
 # Remove install trees. On Kairos, /etc/pwx and /var/lib/osd are OEM bind
 # mounts from /usr/local/.state — remove contents; keep the mountpoints.
