@@ -1,0 +1,53 @@
+[project]
+name = "dhi-catalog-check"
+version = "0.1.0"
+description = "Verify Cilium pack image names/tags exist in the Docker Hardened Images (dhi.io) catalog"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "cilium-pack-images",
+    "click>=8.2.1",
+    "pydantic>=2.11.7",
+    "rich>=14.0.0",
+]
+
+[project.scripts]
+dhi-catalog-check = "dhi_catalog_check.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.2",
+    "ty>=0.0.1a16",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dhi_catalog_check"]
+
+[tool.uv.sources]
+cilium-pack-images = { path = "../cilium-pack-images", editable = true }
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "S", "B", "UP", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+# Intentional docker CLI invocation with argv list (no shell).
+"src/dhi_catalog_check/docker_lookup.py" = ["S603"]
+
+[tool.ty]
+python-version = "3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=dhi_catalog_check --cov-report=term-missing"

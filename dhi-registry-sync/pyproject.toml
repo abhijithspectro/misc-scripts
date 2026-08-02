@@ -1,0 +1,52 @@
+[project]
+name = "dhi-registry-sync"
+version = "0.1.0"
+description = "Dispatch hardened-images self-service registry sync for Cilium DHI images that passed catalog lookup"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "click>=8.2.1",
+    "dhi-catalog-check",
+    "pydantic>=2.11.7",
+    "rich>=14.0.0",
+]
+
+[project.scripts]
+dhi-registry-sync = "dhi_registry_sync.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.2",
+    "ty>=0.0.1a16",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dhi_registry_sync"]
+
+[tool.uv.sources]
+dhi-catalog-check = { path = "../dhi-catalog-check", editable = true }
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "S", "B", "UP", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"src/dhi_registry_sync/gh_dispatch.py" = ["S603"]
+
+[tool.ty]
+python-version = "3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=dhi_registry_sync --cov-report=term-missing"

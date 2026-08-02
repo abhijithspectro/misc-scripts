@@ -1,0 +1,19 @@
+version: 1
+last_pack_version: 1.19.6
+images:
+  cilium: 1.19.6
+  cilium-certgen: 0.4.6
+  hubble-relay: 1.19.6
+  hubble-ui-backend: 0.13.5
+  hubble-ui: 0.13.5
+  cilium-envoy: 1.19.6
+  cilium-operator: 1.19.6
+  cilium-operator-generic: 1.19.6
+  cilium-operator-aws: 1.19.6
+  cilium-operator-azure: 1.19.6
+  cilium-startup-script: '0.20260420'
+  cilium-clustermesh-apiserver: 1.19.6
+  busybox: '1.37'
+  spire-agent: 1.15.1
+  spire-server: 1.15.1
+  ztunnel: '1.30'

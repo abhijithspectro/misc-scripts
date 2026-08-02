@@ -1,0 +1,127 @@
+# Historical association of pack metadata image names to upstream chart paths,
+# plus pack_tag policy used by `prepare --version`.
+#
+# pack_tag.source:
+#   chart        – take tag from the first chart_path (strip leading v if normalize_tags)
+#   pack_version – use the Cilium pack/version being prepared (e.g. envoy convention)
+#   history      – keep the tag from history.yaml (hardened / intentionally divergent)
+#   pinned       – use pack_tag.value as-is
+
+version: 1
+
+normalize_tags: true
+
+registry:
+  # {version}, {name}, {tag}
+  template: "us-docker.pkg.dev/palette-images/hardened-images/packs/cilium/{version}/{name}:{tag}"
+
+chart:
+  # Upstream values.yaml for tag v{version}
+  url_template: "https://raw.githubusercontent.com/cilium/cilium/v{version}/install/kubernetes/cilium/values.yaml"
+
+images:
+  cilium:
+    chart_paths:
+      - image
+      - preflight.image
+    pack_tag:
+      source: chart
+
+  cilium-certgen:
+    chart_paths:
+      - certgen.image
+    pack_tag:
+      source: chart
+
+  hubble-relay:
+    chart_paths:
+      - hubble.relay.image
+    pack_tag:
+      source: chart
+
+  hubble-ui-backend:
+    chart_paths:
+      - hubble.ui.backend.image
+    pack_tag:
+      source: chart
+
+  hubble-ui:
+    chart_paths:
+      - hubble.ui.frontend.image
+    pack_tag:
+      source: chart
+
+  cilium-envoy:
+    chart_paths:
+      - envoy.image
+      - preflight.envoy.image
+    # Pack pins envoy to the Cilium release version, not the chart's envoy build tag.
+    pack_tag:
+      source: pack_version
+
+  cilium-operator:
+    chart_paths:
+      - operator.image
+    operator_variant: base
+    pack_tag:
+      source: chart
+
+  cilium-operator-generic:
+    chart_paths:
+      - operator.image
+    operator_variant: generic
+    pack_tag:
+      source: chart
+
+  cilium-operator-aws:
+    chart_paths:
+      - operator.image
+    operator_variant: aws
+    pack_tag:
+      source: chart
+
+  cilium-operator-azure:
+    chart_paths:
+      - operator.image
+    operator_variant: azure
+    pack_tag:
+      source: chart
+
+  cilium-startup-script:
+    chart_paths:
+      - nodeinit.image
+    pack_tag:
+      source: history
+
+  cilium-clustermesh-apiserver:
+    chart_paths:
+      - clustermesh.apiserver.image
+    pack_tag:
+      source: chart
+
+  busybox:
+    chart_paths:
+      - authentication.mutual.spire.install.initImage
+    pack_tag:
+      source: history
+
+  spire-agent:
+    chart_paths:
+      - authentication.mutual.spire.install.agent.image
+    pack_tag:
+      source: history
+
+  spire-server:
+    chart_paths:
+      - authentication.mutual.spire.install.server.image
+    pack_tag:
+      source: history
+
+  ztunnel:
+    chart_paths:
+      - encryption.ztunnel.image
+    pack_tag:
+      source: history
+
+ignore_chart_paths:
+  - standaloneDnsProxy.image
