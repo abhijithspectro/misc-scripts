@@ -1,0 +1,30 @@
+#!/usr/bin/env zsh
+# Wrapper for Claude Code CLI with permission-skipping defaults
+
+find_claude_executable() {
+  # Try Homebrew path first
+  if command -v brew &>/dev/null; then
+    local brew_cask_path=$(brew --caskroom 2>/dev/null)
+    if [[ -d "$brew_cask_path/claude-code" ]]; then
+      # Find the latest version directory
+      local latest=$(ls -1 "$brew_cask_path/claude-code" | sort -V | tail -1)
+      if [[ -n "$latest" && -x "$brew_cask_path/claude-code/$latest/claude" ]]; then
+        echo "$brew_cask_path/claude-code/$latest/claude"
+        return 0
+      fi
+    fi
+  fi
+
+  # Fall back to PATH lookup
+  if command -v claude &>/dev/null; then
+    command -v claude
+    return 0
+  fi
+
+  # Error if not found
+  echo "Error: claude executable not found" >&2
+  return 1
+}
+
+CLAUDE_BIN=$(find_claude_executable) || exit 1
+exec "$CLAUDE_BIN" --allow-dangerously-skip-permissions --dangerously-skip-permissions "$@"

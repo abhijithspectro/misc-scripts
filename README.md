@@ -10,6 +10,7 @@ Small operational tools. Each Python project uses [`uv`](https://docs.astral.sh/
 | [`dhi-catalog-check/`](dhi-catalog-check/) | Verify those tags exist on Docker Hardened Images (`dhi.io`) |
 | [`dhi-registry-sync/`](dhi-registry-sync/) | Dry-run / dispatch GAR sync workflow for images that passed DHI lookup |
 | [`cleanup-edge-hosts.sh`](cleanup-edge-hosts.sh) | Clean Portworx leftovers on Kairos/edge nodes over SSH |
+| [`claude-skip-perms`](claude-skip-perms) | Claude Code CLI wrapper for automated permission handling |
 
 Typical Cilium → DHI → GAR flow:
 
@@ -109,6 +110,48 @@ SSH into Kairos/edge hosts and remove Portworx host leftovers. Requires `sshpass
 ./cleanup-edge-hosts.sh <ip> [ip...]
 SSH_USER=kairos SSH_PASS=kairos ./cleanup-edge-hosts.sh 10.10.141.177
 ```
+
+---
+
+## claude-skip-perms
+
+A zsh wrapper for Claude Code CLI that automatically skips permission prompts. Useful for scripted or automated workflows where you want Claude Code to run without interactive permission dialogs.
+
+**Purpose:** Streamlines Claude Code invocation by pre-approving all tool use and permission checks. Ideal for CI/CD, automated scripts, and dev workflows.
+
+**Features:**
+- Automatically finds Claude Code executable (Homebrew or PATH fallback)
+- Passes `--dangerously-skip-permissions` flags to bypass permission dialogs
+- No modification of configuration files needed
+
+**Setup:**
+
+Copy to a directory in your PATH:
+```bash
+cp claude-skip-perms ~/.local/bin/
+chmod +x ~/.local/bin/claude-skip-perms
+```
+
+Or create a symlink:
+```bash
+ln -s $(pwd)/claude-skip-perms ~/.local/bin/claude-skip-perms
+```
+
+**Usage:**
+
+```bash
+claude-skip-perms --help
+claude-skip-perms projects list
+claude-skip-perms code --help
+```
+
+**Implementation details:**
+- Detects Homebrew-installed Claude Code first (via `brew --caskroom`)
+- Falls back to `claude` in PATH if Homebrew path not found
+- Wraps all arguments with permission-skipping flags
+- Compatible with all Claude Code commands and arguments
+
+⚠️ **Warning:** This wrapper disables permission prompts entirely. Use only in trusted environments (local dev, verified scripts). Do not use with untrusted code that might execute arbitrary Claude Code commands.
 
 ---
 
