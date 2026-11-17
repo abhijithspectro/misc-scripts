@@ -370,18 +370,22 @@ build_iso() {
     complete_step
 }
 
+# Per-arch tags appear as e.g. ":tag_linux_amd64" (Earthly/docker) or ":tag-amd64";
+# skip those and keep the architecture-neutral tag.
+ARCH_TAG_RE='[._-](linux[._-])?(amd64|arm64|x86_64|aarch64)([._-]|$)'
+
 find_provider_image() {
     local distro="$1" version="$2" tag_prefix="$IMAGE_REGISTRY/ubuntu:" image
     image="$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
         | grep -F "$tag_prefix$distro-$version-$PE_VERSION-$VARIANT_CUSTOM_TAG" \
-        | grep -Ev -- '-(amd64|arm64)(-|$)' \
+        | grep -Ev -- "$ARCH_TAG_RE" \
         | sort -u \
         | head -1 \
         || true)"
     if [ -z "$image" ]; then
         image="$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
             | grep -F "$tag_prefix$distro-$version-" \
-            | grep -Ev -- '-(amd64|arm64)(-|$)' \
+            | grep -Ev -- "$ARCH_TAG_RE" \
             | sort -u \
             | head -1 \
             || true)"
