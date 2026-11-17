@@ -53,6 +53,7 @@ load_env() {
 CANVOS=""
 DISTROS=""
 PIRAEUS=false
+RUN_STAMP=""
 declare -A VERSIONS=()
 
 parse_args() {
@@ -272,7 +273,9 @@ iso_name_for() {
 push_iso() {
     local iso="$1"
     local user="${GOVC_USERNAME%@*}"
-    local dest="ISO/$user/$(basename "$iso")"
+    # One timestamp per run keeps every ISO from this invocation together and
+    # leaves the filename identical to the local build output.
+    local dest="ISO/$user/$RUN_STAMP/$(basename "$iso")"
     log "Uploading $(basename "$iso") to $dest"
     govc datastore.upload "$iso" "$dest"
 }
@@ -381,6 +384,7 @@ main() {
     parse_args "$@"
     load_env
     validate
+    RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
 
     local d any_fips=false any_non_fips=false
     for d in "${DISTRO_LIST[@]}"; do
