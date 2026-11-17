@@ -12,6 +12,9 @@ log()  { printf '==> %s\n' "$*"; }
 warn() { printf 'Warning: %s\n' "$*" >&2; }
 die()  { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
+# Records a produced artifact (ISO upload, docker push, zot copy) in $LOG_FILE.
+record() { printf '%s\n' "$*" >> "$LOG_FILE"; }
+
 usage() {
     cat <<EOF
 Usage: $(basename "$0") --canvos <path> --distros <list> [--<distro>-versions <list>] [--piraeus]
@@ -54,6 +57,7 @@ CANVOS=""
 DISTROS=""
 PIRAEUS=false
 RUN_STAMP=""
+LOG_FILE=""
 declare -A VERSIONS=()
 
 parse_args() {
@@ -215,6 +219,7 @@ build_ubuntu_kairos() {
 
     log "Pushing $final_image"
     docker push "$final_image"
+    record "docker-push image=$final_image"
 
     restore_generated_inputs
 }
@@ -278,6 +283,7 @@ push_iso() {
     local dest="ISO/$user/$RUN_STAMP/$(basename "$iso")"
     log "Uploading $(basename "$iso") to $dest"
     govc datastore.upload "$iso" "$dest"
+    record "iso local=$iso datastore=$dest"
 }
 
 build_iso() {
@@ -369,13 +375,16 @@ build_provider_images() {
 
             log "Pushing $image"
             docker push "$image"
+            record "docker-push image=$image"
 
             local zot="$ZST_PALETTE"
             if is_fips "$distro"; then
                 zot="$ZST_VERTEX"
             fi
-            log "Copying $image to $zot:$ZOT_PORT/$ZOT_PROJECT"
-            oras copy "$image" "$zot:$ZOT_PORT/$ZOT_PROJECT/$image" --to-insecure
+            local zot_image="$zot:$ZOT_PORT/$ZOT_PROJECT/$image"
+            log "Copying $image to $zot_image"
+            oras copy "$image" "$zot_image" --to-insecure
+            record "zot-copy source=$image target=$zot_image"
         done
     done
 }
@@ -385,6 +394,9 @@ main() {
     load_env
     validate
     RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
+    LOG_FILE="$SCRIPT_DIR/canvos-builder-$RUN_STAMP.log"
+    : > "$LOG_FILE"
+    log "Logging artifacts to $LOG_FILE"
 
     local d any_fips=false any_non_fips=false
     for d in "${DISTRO_LIST[@]}"; do
