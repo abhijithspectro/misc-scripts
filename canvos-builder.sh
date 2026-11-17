@@ -142,6 +142,16 @@ validate() {
 
 is_fips() { [[ "$1" == *fips* ]]; }
 
+# rke2 FIPS is expressed upstream as K8S_DISTRIBUTION=rke2 + FIPS_ENABLED=true
+# (see the Earthfile provider-image branches), so the distro name is normalised
+# for the k8s_version.json key and the provider image tag.
+effective_distro() {
+    case "$1" in
+        rke2-fips) printf 'rke2' ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
 cleanup_docker() {
     log "Cleaning up docker images on this host"
     docker images -q 2>/dev/null | sort -u | xargs -r docker rmi -f >/dev/null 2>&1 || true
@@ -314,11 +324,12 @@ find_provider_image() {
 }
 
 build_provider_images() {
-    local distro version variant
+    local distro version variant k8s_distro
     for distro in "${DISTRO_LIST[@]}"; do
         local -a _versions=()
         IFS=',' read -r -a _versions <<< "${VERSIONS[$distro]}"
         for version in "${_versions[@]}"; do
+            k8s_distro="$(effective_distro "$distro")"
             if is_fips "$distro"; then
                 variant=fips
             elif $PIRAEUS; then
@@ -329,13 +340,13 @@ build_provider_images() {
             variant_args "$variant"
             common_args
 
-            log "Provider image ($variant): $distro $version"
+            log "Provider image ($variant): $distro $version (K8S_DISTRIBUTION=$k8s_distro)"
             rm -f "$CANVOS/k8s_version.json"
-            printf '{\n  "%s": [\n    "%s"\n  ]\n}\n' "$distro" "$version" > "$CANVOS/k8s_version.json"
+            printf '{\n  "%s": [\n    "%s"\n  ]\n}\n' "$k8s_distro" "$version" > "$CANVOS/k8s_version.json"
 
             local args=(
                 "${COMMON_ARGS[@]}"
-                "--K8S_DISTRIBUTION=$distro"
+                "--K8S_DISTRIBUTION=$k8s_distro"
                 "--OS_VERSION=$VARIANT_OS_VERSION"
                 "--CUSTOM_TAG=$VARIANT_CUSTOM_TAG"
                 "--UPDATE_KERNEL=$VARIANT_UPDATE_KERNEL"
@@ -345,7 +356,7 @@ build_provider_images() {
             ( cd "$CANVOS" && ./earthly.sh +build-provider-images "${args[@]}" )
 
             local image
-            image="$(find_provider_image "$distro" "$version")"
+            image="$(find_provider_image "$k8s_distro" "$version")"
             [ -n "$image" ] || die "No provider image found for $distro $version"
             log "Provider image built: $image"
 
