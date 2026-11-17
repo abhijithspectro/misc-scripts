@@ -228,19 +228,23 @@ variant_args() {
     VARIANT_EXTRA=()
     case "$variant" in
         default)
-            VARIANT_EXTRA=(--FIPS_ENABLED=false) ;;
+            export UBUNTU_PRO_ATTACH=false
+            VARIANT_EXTRA=(--FIPS_ENABLED=false --UBUNTU_PRO_ATTACH=false) ;;
         piraeus)
+            export UBUNTU_PRO_ATTACH=false
             VARIANT_CUSTOM_TAG="piraeus"
             VARIANT_UPDATE_KERNEL=true
-            VARIANT_EXTRA=(--FIPS_ENABLED=false) ;;
+            VARIANT_EXTRA=(--FIPS_ENABLED=false --UBUNTU_PRO_ATTACH=false) ;;
         fips)
             [ -n "${UBUNTU_FIPS:-}" ] || die "UBUNTU_FIPS is not set"
             [ -n "${UBUNTU_PRO_KEY:-}" ] || die "UBUNTU_PRO_KEY is not set"
+            # earthly.sh only forwards the token as a BuildKit secret when
+            # UBUNTU_PRO_ATTACH is set in its environment; the build arg alone
+            # reaches the Earthfile and leaves --secret UBUNTU_PRO_KEY unset.
             export UBUNTU_PRO_KEY
+            export UBUNTU_PRO_ATTACH=true
             VARIANT_OS_VERSION="$UBUNTU_FIPS"
             VARIANT_CUSTOM_TAG="fips"
-            # The Earthfile has no UBUNTU_PRO_KEY build arg; earthly.sh forwards
-            # the env var as a BuildKit secret when UBUNTU_PRO_ATTACH=true.
             VARIANT_EXTRA=(
                 --FIPS_ENABLED=true
                 --KAIROS_BASE_IMAGE_URL="$IMAGE_REGISTRY"
