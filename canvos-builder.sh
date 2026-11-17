@@ -7,6 +7,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VALID_DISTROS=(kubeadm kubeadm-fips rke2 rke2-fips k3s canonical)
+ORAS_ATTEMPTS=3
+RETRY_DELAY=5
 
 log()  { printf '==> %s\n' "$*"; }
 warn() { printf 'Warning: %s\n' "$*" >&2; }
@@ -14,6 +16,55 @@ die()  { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
 # Records a produced artifact (ISO upload, docker push, zot copy) in $LOG_FILE.
 record() { printf '%s\n' "$*" >> "$LOG_FILE"; }
+
+# Step tracking for the end-of-run summary.
+SUMMARY_PASS=()
+SUMMARY_NONFATAL=()
+SUMMARY_FAIL=()
+CURRENT_STEP=""
+
+begin_step() { CURRENT_STEP="$1"; log "$1"; }
+
+complete_step() {
+    [ -n "$CURRENT_STEP" ] && SUMMARY_PASS+=("$CURRENT_STEP")
+    CURRENT_STEP=""
+}
+
+nonfatal_failure() {
+    SUMMARY_NONFATAL+=("$1")
+    CURRENT_STEP=""
+}
+
+print_summary() {
+    local rc=$?
+    if [ "$rc" -ne 0 ] && [ -n "$CURRENT_STEP" ]; then
+        SUMMARY_FAIL+=("$CURRENT_STEP")
+    fi
+    CURRENT_STEP=""
+
+    printf '\n==> Summary (exit %d)\n' "$rc"
+    printf 'Passed (%d)\n' "${#SUMMARY_PASS[@]}"
+    [ ${#SUMMARY_PASS[@]} -gt 0 ] && printf '  - %s\n' "${SUMMARY_PASS[@]}"
+    printf 'Non-fatal failures (%d)\n' "${#SUMMARY_NONFATAL[@]}"
+    [ ${#SUMMARY_NONFATAL[@]} -gt 0 ] && printf '  - %s\n' "${SUMMARY_NONFATAL[@]}"
+    printf 'Failed (%d)\n' "${#SUMMARY_FAIL[@]}"
+    [ ${#SUMMARY_FAIL[@]} -gt 0 ] && printf '  - %s\n' "${SUMMARY_FAIL[@]}"
+    return 0
+}
+
+# Runs a command up to $1 times, waiting $RETRY_DELAY seconds between attempts.
+retry() {
+    local attempts="$1" n=1
+    shift
+    until "$@"; do
+        if [ "$n" -ge "$attempts" ]; then
+            return 1
+        fi
+        warn "Attempt $n/$attempts failed: $* — retrying in ${RETRY_DELAY}s"
+        sleep "$RETRY_DELAY"
+        n=$((n + 1))
+    done
+}
 
 usage() {
     cat <<EOF
@@ -209,7 +260,7 @@ build_ubuntu_kairos() {
     local final_image="$IMAGE_REGISTRY/kairos-ubuntu:${UBUNTU_FIPS}-core-${ARCH}-generic-${init_version}${suffix}"
     local build_image="$IMAGE_REGISTRY/kairos-ubuntu-build:${UBUNTU_FIPS}-${ARCH}"
 
-    log "Building ubuntu-kairos base image as $build_image"
+    begin_step "ubuntu-kairos base image build and push ($final_image)"
     ( cd "$fips_dir" && bash ./build.sh "$build_image" )
 
     docker image inspect "$build_image" >/dev/null 2>&1 \
@@ -220,6 +271,7 @@ build_ubuntu_kairos() {
     log "Pushing $final_image"
     docker push "$final_image"
     record "docker-push image=$final_image"
+    complete_step
 
     restore_generated_inputs
 }
@@ -303,7 +355,7 @@ build_iso() {
         "${VARIANT_EXTRA[@]}"
     )
 
-    log "Building installer ISO ($variant): $iso_name"
+    begin_step "installer ISO ($variant) build and upload ($iso_name)"
     ( cd "$CANVOS" && ./earthly.sh +iso "${args[@]}" )
 
     local iso_path="$CANVOS/build/$iso_name.iso"
@@ -315,6 +367,7 @@ build_iso() {
     [ -n "$iso_path" ] && [ -f "$iso_path" ] || die "Installer ISO for $variant not found in $CANVOS/build"
 
     push_iso "$iso_path"
+    complete_step
 }
 
 find_provider_image() {
@@ -353,7 +406,7 @@ build_provider_images() {
             variant_args "$variant"
             common_args
 
-            log "Provider image ($variant): $distro $version (K8S_DISTRIBUTION=$k8s_distro)"
+            begin_step "provider image $k8s_distro $version ($variant) build and push"
             rm -f "$CANVOS/k8s_version.json"
             printf '{\n  "%s": [\n    "%s"\n  ]\n}\n' "$k8s_distro" "$version" > "$CANVOS/k8s_version.json"
 
@@ -376,15 +429,22 @@ build_provider_images() {
             log "Pushing $image"
             docker push "$image"
             record "docker-push image=$image"
+            complete_step
 
             local zot="$ZST_PALETTE"
             if is_fips "$distro"; then
                 zot="$ZST_VERTEX"
             fi
             local zot_image="$zot:$ZOT_PORT/$ZOT_PROJECT/$image"
-            log "Copying $image to $zot_image"
-            oras copy "$image" "$zot_image" --to-insecure
-            record "zot-copy source=$image target=$zot_image"
+            begin_step "zot copy $image -> $zot_image"
+            if retry "$ORAS_ATTEMPTS" oras copy "$image" "$zot_image" --to-insecure; then
+                record "zot-copy source=$image target=$zot_image"
+                complete_step
+            else
+                warn "zot copy failed after $ORAS_ATTEMPTS attempts: $image -> $zot_image"
+                record "zot-copy-failed source=$image target=$zot_image"
+                nonfatal_failure "zot copy $image -> $zot_image failed after $ORAS_ATTEMPTS attempts"
+            fi
         done
     done
 }
@@ -397,6 +457,7 @@ main() {
     LOG_FILE="$SCRIPT_DIR/canvos-builder-$RUN_STAMP.log"
     : > "$LOG_FILE"
     log "Logging artifacts to $LOG_FILE"
+    trap print_summary EXIT
 
     local d any_fips=false any_non_fips=false
     for d in "${DISTRO_LIST[@]}"; do
